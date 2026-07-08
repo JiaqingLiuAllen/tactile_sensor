@@ -5,6 +5,7 @@
 
 import atexit
 import csv
+import os
 import queue
 import struct
 import threading
@@ -26,8 +27,8 @@ from export_7x7_html import export_csv_to_html
 
 
 # === Serial config ===
-SERIAL_PORT = "/dev/cu.usbserial-0001"
-BAUD_RATE = 921600
+SERIAL_PORT = os.environ.get("TACTILE_SERIAL_PORT", "/dev/cu.usbserial-0001")
+BAUD_RATE = int(os.environ.get("TACTILE_BAUD_RATE", "921600"))
 SERIAL_TIMEOUT_SEC = 0.2
 
 # === Binary protocol ===
@@ -49,7 +50,7 @@ FRAME_REST_BYTES = FRAME_BODY_BYTES + 2
 # === Display options ===
 VMIN = 0.0
 VMAX = 3.3
-PLOT_INTERVAL_MS = 33
+PLOT_INTERVAL_MS = int(os.environ.get("TACTILE_PLOT_INTERVAL_MS", "33"))
 DEBUG_EVERY = 25
 BAR_WIDTH = 0.75
 SHOW_NUMBERS = True
@@ -59,7 +60,8 @@ TEXT_Z_OFFSET_FRACTION = 0.02
 # === Recording options ===
 DATA_DIR = Path(__file__).resolve().parent / "data"
 RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
-CSV_PATH = DATA_DIR / f"matrix_7x7_binary_{RUN_TIMESTAMP}.csv"
+CSV_PREFIX = os.environ.get("TACTILE_CSV_PREFIX", "matrix_7x7_binary")
+CSV_PATH = DATA_DIR / f"{CSV_PREFIX}_{RUN_TIMESTAMP}.csv"
 CSV_FLUSH_EVERY = 50
 AUTO_EXPORT_HTML = True
 
