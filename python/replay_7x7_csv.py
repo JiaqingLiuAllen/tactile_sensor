@@ -47,11 +47,11 @@ def load_frames(csv_path):
         for row in reader:
             values = [float(row[column]) for column in value_columns]
             frames.append(np.array(values, dtype=float).reshape((MATRIX_ROWS, MATRIX_COLS)))
-            if "device_millis" in fieldnames and row.get("device_millis"):
-                display_times.append(float(row["device_millis"]) / 1000)
+            if "elapsed_sec" in fieldnames and row.get("elapsed_sec"):
+                display_times.append(float(row["elapsed_sec"]))
             else:
                 display_times.append(
-                    float(row.get("elapsed_sec") or len(frames) * DEFAULT_FRAME_INTERVAL_MS / 1000)
+                    len(frames) * DEFAULT_FRAME_INTERVAL_MS / 1000
                 )
             timestamps.append(row.get("timestamp_iso", ""))
 

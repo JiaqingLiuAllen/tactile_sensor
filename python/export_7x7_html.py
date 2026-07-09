@@ -165,7 +165,7 @@ HTML_TEMPLATE = r"""<!doctype html>
     let timer = null;
 
     slider.max = Math.max(DATA.frames.length - 1, 0);
-    meta.textContent = `${DATA.source_name} | ${DATA.frames.length} frames | duration ${DATA.duration_sec.toFixed(3)} s | nominal ${DATA.nominal_fps.toFixed(1)} fps`;
+    meta.textContent = `${DATA.source_name} | ${DATA.frames.length} recorded frames | recorded duration ${DATA.duration_sec.toFixed(3)} s | recorded ${DATA.nominal_fps.toFixed(1)} fps`;
 
     function clamp(value, lo, hi) {
       return Math.max(lo, Math.min(hi, value));
@@ -313,9 +313,17 @@ HTML_TEMPLATE = r"""<!doctype html>
       drawHeatmap(frame);
       drawBars(frame);
       slider.value = frameIndex;
+      const deviceInfo = [];
+      if (frame.device_t !== null && frame.device_t !== undefined) {
+        deviceInfo.push(`device t=${frame.device_t.toFixed(3)}s`);
+      }
+      if (frame.device_frame !== null && frame.device_frame !== undefined) {
+        deviceInfo.push(`device frame=${frame.device_frame}`);
+      }
       readout.innerHTML = [
         `frame ${frameIndex + 1}/${DATA.frames.length}`,
-        `t=${frame.t.toFixed(3)}s`,
+        `recorded t=${frame.t.toFixed(3)}s`,
+        ...deviceInfo,
         frame.timestamp ? frame.timestamp : "",
         `min=${Math.min(...frame.values).toFixed(3)} ${unit}`,
         `max=${Math.max(...frame.values).toFixed(3)} ${unit}`
@@ -361,7 +369,8 @@ def latest_csv(data_dir):
 def load_csv_data(csv_path):
     value_columns = [f"R{i+1}C{j+1}" for i in range(MATRIX_ROWS) for j in range(MATRIX_COLS)]
     frames = []
-    times = []
+    recorded_times = []
+    device_times = []
     unit = "V"
 
     with csv_path.open("r", newline="", encoding="utf-8") as csv_file:
@@ -375,21 +384,32 @@ def load_csv_data(csv_path):
             values = [round(float(row[column]), 6) for column in value_columns]
             if row.get("value_unit"):
                 unit = row["value_unit"]
-            if "device_millis" in fieldnames and row.get("device_millis"):
-                time_sec = float(row["device_millis"]) / 1000
+            if "elapsed_sec" in fieldnames and row.get("elapsed_sec"):
+                recorded_time_sec = float(row["elapsed_sec"])
             else:
-                time_sec = float(row.get("elapsed_sec") or len(frames) * DEFAULT_FRAME_INTERVAL_MS / 1000)
-            times.append(time_sec)
+                recorded_time_sec = len(frames) * DEFAULT_FRAME_INTERVAL_MS / 1000
+            device_time_sec = (
+                float(row["device_millis"]) / 1000
+                if "device_millis" in fieldnames and row.get("device_millis")
+                else None
+            )
+            recorded_times.append(recorded_time_sec)
+            device_times.append(device_time_sec)
             frames.append({
                 "timestamp": row.get("timestamp_iso", ""),
+                "device_frame": (
+                    int(row["device_frame_index"])
+                    if "device_frame_index" in fieldnames and row.get("device_frame_index")
+                    else None
+                ),
                 "values": values,
             })
 
     if not frames:
         raise SystemExit(f"{csv_path} has no matrix frames")
 
-    start_time = times[0]
-    duration_sec = max(times[-1] - start_time, 0.0)
+    start_time = recorded_times[0]
+    duration_sec = max(recorded_times[-1] - start_time, 0.0)
     frame_interval_ms = (
         duration_sec * 1000 / (len(frames) - 1)
         if len(frames) > 1 and duration_sec > 0
@@ -397,8 +417,14 @@ def load_csv_data(csv_path):
     )
     nominal_fps = 1000 / frame_interval_ms if frame_interval_ms > 0 else 0
 
-    for frame, time_sec in zip(frames, times):
+    first_device_time = next((time for time in device_times if time is not None), None)
+    for frame, time_sec, device_time_sec in zip(frames, recorded_times, device_times):
         frame["t"] = round(time_sec - start_time, 6)
+        frame["device_t"] = (
+            round(device_time_sec - first_device_time, 6)
+            if device_time_sec is not None and first_device_time is not None
+            else None
+        )
 
     return {
         "source_name": csv_path.name,
